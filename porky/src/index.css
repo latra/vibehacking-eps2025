@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary: #ec7266;
+  --color-primary-light: #f9c5bf;
+  --color-primary-dark: #d9564a;
+  --color-farm-green: #6b8e23;
+  --color-farm-green-light: #9cb369;
+  --color-earth-brown: #8b7355;
+  --color-wheat: #f5deb3;
+  --color-barn-red: #c85a54;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #f9f6f1;
+  background-image: 
+    repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(107, 142, 35, 0.02) 35px, rgba(107, 142, 35, 0.02) 70px);
+  color: #3d3d3d;
+  font-family: 'Georgia', 'Times New Roman', serif;
+}
+
+/* Smooth transitions for all interactive elements */
+button,
+a,
+input,
+select {
+  transition: all 0.2s ease;
+}
+
+/* Custom button styles */
+.btn-primary {
+  background-color: var(--color-barn-red);
+  color: white;
+  border: 2px solid #a64740;
+  border-radius: 0.5rem;
+  padding: 0.625rem 1.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: #b24942;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+}
+
+.btn-primary:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.btn-secondary {
+  background-color: #fff;
+  color: var(--color-farm-green);
+  border: 2px solid var(--color-farm-green);
+  border-radius: 0.5rem;
+  padding: 0.625rem 1.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-farm-green);
+  color: white;
+}
+
+/* Card styles */
+.card-farm {
+  background-color: #fff;
+  border: 2px solid #ddd;
+  border-radius: 0.75rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+.card-farm:hover {
+  border-color: var(--color-farm-green);
+  box-shadow: 0 4px 8px rgba(107, 142, 35, 0.15);
+}
