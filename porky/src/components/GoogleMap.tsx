@@ -106,6 +106,7 @@ function GoogleMap({
   const defaultMarkerTitlesRef = useRef<Record<string, string>>({})
   const defaultMarkerIconsRef = useRef<Record<string, any>>({})
   const highlightedMarkerIdRef = useRef<string | null>(null)
+  const oinkSoundRef = useRef<HTMLAudioElement | null>(null)
 
   const [isLoading, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
@@ -117,6 +118,59 @@ function GoogleMap({
   const [editingId, setEditingId] = useState<string | null>(null)
 
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
+
+  // Initialize and preload audio for squeak sound
+  useEffect(() => {
+    const audio = new Audio('/squeak.mp3')
+    audio.volume = 0.5
+    audio.preload = 'auto'
+    
+    // Preload the audio by loading it immediately
+    audio.load()
+    
+    // Try to play and immediately pause to ensure the audio is ready
+    // This helps reduce delay on first play
+    const preloadPlay = () => {
+      audio.play().then(() => {
+        audio.pause()
+        audio.currentTime = 0
+      }).catch(() => {
+        // Ignore errors during preload
+      })
+    }
+    
+    // Preload after user interaction (required by browsers)
+    const handleFirstInteraction = () => {
+      preloadPlay()
+      document.removeEventListener('click', handleFirstInteraction)
+      document.removeEventListener('touchstart', handleFirstInteraction)
+    }
+    
+    document.addEventListener('click', handleFirstInteraction, { once: true })
+    document.addEventListener('touchstart', handleFirstInteraction, { once: true })
+    
+    oinkSoundRef.current = audio
+    
+    return () => {
+      if (oinkSoundRef.current) {
+        oinkSoundRef.current.pause()
+        oinkSoundRef.current = null
+      }
+      document.removeEventListener('click', handleFirstInteraction)
+      document.removeEventListener('touchstart', handleFirstInteraction)
+    }
+  }, [])
+
+  const playSqueakSound = () => {
+    if (oinkSoundRef.current) {
+      // Reset to start and play immediately
+      oinkSoundRef.current.currentTime = 0
+      oinkSoundRef.current.play().catch((error) => {
+        // Ignore play errors (e.g., user hasn't interacted with page yet)
+        console.debug('Could not play squeak sound:', error)
+      })
+    }
+  }
 
   const createMarker = (entity: StoredEntity, enableInteraction: boolean = true) => {
     if (!mapRef.current || !(window as any).google?.maps) return
@@ -148,6 +202,36 @@ function GoogleMap({
         setName(entity.name)
         setMaxCapacity(String(entity.maxCapacity))
         setEditingId(entity.id)
+      })
+    }
+
+    // Add hover sound and icon dilation for farm markers (pigs)
+    if (isFarm) {
+      const originalIcon = marker.getIcon()
+      const originalLabel = marker.getLabel()
+      const originalScale = originalIcon.scale || 15
+      const originalFontSize = originalLabel?.fontSize || '26px'
+      const fontSizeNumber = parseInt(originalFontSize.replace('px', ''), 10)
+
+      marker.addListener('mouseover', () => {
+        playSqueakSound()
+        // Dilate the icon by increasing its scale
+        const dilatedIcon = {
+          ...originalIcon,
+          scale: originalScale * 1.3,
+        }
+        marker.setIcon(dilatedIcon)
+        // Increase emoji size
+        marker.setLabel({
+          ...originalLabel,
+          fontSize: `${Math.round(fontSizeNumber * 1.3)}px`,
+        })
+      })
+
+      marker.addListener('mouseout', () => {
+        // Restore original icon size and label
+        marker.setIcon(originalIcon)
+        marker.setLabel(originalLabel)
       })
     }
 
