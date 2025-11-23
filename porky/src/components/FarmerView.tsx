@@ -346,86 +346,109 @@ function FarmerView() {
           return
         }
 
-        const origins = farms.map((farm) => ({
-          lat: farm.lat,
-          lng: farm.lng,
-        }))
-        const destinations = destinationsEntities.map((entity) => ({
-          lat: entity.lat,
-          lng: entity.lng,
-        }))
+        // Límite de Google Maps Distance Matrix API: 100 elementos por petición
+        // Elementos = origins × destinations
+        // Para evitar MAX_ELEMENTS_EXCEEDED, procesamos de a una granja a la vez
+        const MAX_DESTINATIONS_PER_REQUEST = 25
+        const allRoutesByFarm: Record<string, TravelTimeToEntity[]> = {}
 
-        service.getDistanceMatrix(
-          {
-            origins,
-            destinations,
-            travelMode: google.maps.TravelMode.DRIVING,
-            unitSystem: google.maps.UnitSystem.METRIC,
-          },
-          (response: any, status: string) => {
+        // Procesar cada granja individualmente para evitar exceder el límite
+        for (let farmIndex = 0; farmIndex < farms.length; farmIndex++) {
+          if (cancelled) return
+
+          const farm = farms[farmIndex]
+          const origin = { lat: farm.lat, lng: farm.lng }
+          
+          // Dividir destinos en lotes si hay muchos
+          const travelTimesForFarm: TravelTimeToEntity[] = []
+          
+          for (let destIndex = 0; destIndex < destinationsEntities.length; destIndex += MAX_DESTINATIONS_PER_REQUEST) {
             if (cancelled) return
 
-            if (status !== 'OK' || !response?.rows) {
-              setRoutesError(
-                'No se han podido calcular las rutas entre granjas y el resto de puntos. Estado: ' + status,
-              )
-              setIsRoutesLoading(false)
-              setHasComputedRoutes(true)
-              setEntitiesHash(currentHash)
-              return
-            }
+            const destBatch = destinationsEntities.slice(
+              destIndex,
+              Math.min(destIndex + MAX_DESTINATIONS_PER_REQUEST, destinationsEntities.length)
+            )
 
-            const nextRoutesByFarm: Record<string, TravelTimeToEntity[]> = {}
+            const destinations = destBatch.map((entity) => ({
+              lat: entity.lat,
+              lng: entity.lng,
+            }))
 
-            response.rows.forEach(
-              (row: any, rowIndex: number) => {
-                const farm = farms[rowIndex]
-                if (!farm) return
+            try {
+              const response = await new Promise<any>((resolve, reject) => {
+                service.getDistanceMatrix(
+                  {
+                    origins: [origin],
+                    destinations,
+                    travelMode: google.maps.TravelMode.DRIVING,
+                    unitSystem: google.maps.UnitSystem.METRIC,
+                  },
+                  (resp: any, status: string) => {
+                    if (status === 'OK' && resp?.rows) {
+                      resolve(resp)
+                    } else {
+                      reject(new Error(`API status: ${status}`))
+                    }
+                  },
+                )
+              })
 
-                const elements = row.elements ?? []
-                const travelTimes: TravelTimeToEntity[] = []
+              if (cancelled) return
 
-                elements.forEach((element: any, colIndex: number) => {
-                  const target = destinationsEntities[colIndex]
-                  if (!target) return
+              const row = response.rows[0]
+              if (!row) continue
 
-                  // Omitimos la distancia de la granja a sí misma
-                  if (target.id === farm.id) return
+              const elements = row.elements ?? []
+              
+              elements.forEach((element: any, colIndex: number) => {
+                const target = destBatch[colIndex]
+                if (!target) return
 
-                  if (element.status !== 'OK') {
-                    console.warn(`Element status not OK for ${target.name}: ${element.status}`)
-                    return
-                  }
+                // Omitimos la distancia de la granja a sí misma
+                if (target.id === farm.id) return
 
-                  const distanceText = element.distance?.text ?? ''
-                  const durationText = element.duration?.text ?? ''
-
-                  travelTimes.push({
-                    targetId: target.id,
-                    targetName: target.name,
-                    distanceText,
-                    durationText,
-                  })
-                })
-
-                if (travelTimes.length > 0) {
-                  nextRoutesByFarm[farm.id] = travelTimes
+                if (element.status !== 'OK') {
+                  console.warn(`Element status not OK for ${target.name}: ${element.status}`)
+                  return
                 }
-              },
-            )
 
-            setFarms((prev) =>
-              prev.map((farm) => ({
-                ...farm,
-                travelTimes: nextRoutesByFarm[farm.id] ?? [],
-              })),
-            )
+                const distanceText = element.distance?.text ?? ''
+                const durationText = element.duration?.text ?? ''
 
-            setIsRoutesLoading(false)
-            setHasComputedRoutes(true)
-            setEntitiesHash(currentHash)
-          },
+                travelTimesForFarm.push({
+                  targetId: target.id,
+                  targetName: target.name,
+                  distanceText,
+                  durationText,
+                })
+              })
+
+              // Pequeña pausa entre peticiones para no saturar la API
+              await new Promise(resolve => setTimeout(resolve, 200))
+            } catch (error) {
+              console.error(`Error processing batch for ${farm.name}:`, error)
+              // Continuar con el siguiente lote incluso si este falla
+            }
+          }
+
+          if (travelTimesForFarm.length > 0) {
+            allRoutesByFarm[farm.id] = travelTimesForFarm
+          }
+        }
+
+        if (cancelled) return
+
+        setFarms((prev) =>
+          prev.map((farm) => ({
+            ...farm,
+            travelTimes: allRoutesByFarm[farm.id] ?? [],
+          })),
         )
+
+        setIsRoutesLoading(false)
+        setHasComputedRoutes(true)
+        setEntitiesHash(currentHash)
       } catch (error) {
         if (cancelled) return
         console.error('Error calculating routes:', error)
